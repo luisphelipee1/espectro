@@ -211,6 +211,19 @@ p{margin:0}
 .kv{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:0}
 .kv dt{font-size:.72rem;color:var(--muted)}.kv dd{margin:0;font-weight:700}
 .calc .seg button{flex:1}
+.area{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.area summary{list-style:none;display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;padding:12px 14px;cursor:pointer}
+.area summary::-webkit-details-marker{display:none}
+.area summary:focus-visible{outline:3px solid var(--safranin);outline-offset:-3px}
+.area-ic{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;background:var(--violet-soft);color:var(--violet)}
+.area-ic svg{width:20px;height:20px}
+.area-t{display:flex;flex-direction:column;min-width:0}
+.area-t b{font-family:var(--f-display);font-size:1.02rem}
+.area-t small{color:var(--muted);font-size:.78rem}
+.area-ring{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:conic-gradient(var(--safranin) calc(var(--p)*1%),var(--surface2) 0)}
+.area-ring span{width:34px;height:34px;border-radius:50%;background:var(--surface);display:grid;place-items:center;font-size:.68rem;font-weight:700}
+.area[open] summary{border-bottom:1px solid var(--line)}
+.area .topics{padding:12px 14px}
 /* tabbar */
 .tabbar{position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--line);padding:6px max(8px,env(safe-area-inset-right,0px)) calc(6px + env(safe-area-inset-bottom,0px)) max(8px,env(safe-area-inset-left,0px));display:flex;justify-content:center;z-index:5}
 .tabbar nav{display:grid;grid-template-columns:repeat(5,1fr);width:100%;max-width:560px}
@@ -1060,7 +1073,11 @@ function renderHome(){
       <button class="mode alt" data-go="match"><span class="ic">${I.bolt}</span><h3>Contrarreloj</h3><p>Bichos vs drogas · récord ${st.bestMatch||0}</p></button>
       <button class="mode" data-go="calc"><span class="ic">${I.pill}</span><h3>Calculadoras</h3><p>ClCr, AUC vanco, aminoglucósidos</p></button>
     </div>
-    <section class="stack" style="gap:10px"><h2>Rondas por tema</h2><div class="topics">${Object.entries(TOPICS).map(([k,t])=>{const done=(st.topicDone||[]).includes(k),lock=t.req&&!(st.topicDone||[]).includes(t.req);return `<button class="topic ${lock?'locked':''} ${done?'done':''}" data-topic="${k}" ${lock?'disabled':''}><b>${esc(t.n)}</b><span>${lock?'Desbloquea con 80% en el nivel anterior':(done?'Superado · ':'')+Q.filter(q=>t.tags.includes(q.t)).length+' preguntas'}</span></button>`}).join('')}</div></section>
+    <section class="stack" style="gap:10px"><div class="row" style="justify-content:space-between"><h2>Rondas por área</h2><span class="muted mono">${(st.topicDone||[]).length}/${Object.keys(TOPICS).length}</span></div>
+      ${AREAS.map(a=>{const ks=a.k.filter(k=>TOPICS[k]);const done=ks.filter(k=>(st.topicDone||[]).includes(k)).length;const pct=Math.round(done/ks.length*100);
+        return `<details class="area" ${(st.openArea||'')===a.id?'open':''} data-area="${a.id}"><summary><span class="area-ic">${I[a.ic]}</span><span class="area-t"><b>${esc(a.n)}</b><small>${done}/${ks.length} superadas · ${esc(a.d)}</small></span><span class="area-ring" style="--p:${pct}"><span class="mono">${pct}%</span></span></summary>
+        <div class="topics">${ks.map(k=>{const t=TOPICS[k],dn=(st.topicDone||[]).includes(k),lock=t.req&&!(st.topicDone||[]).includes(t.req),best=(st.topicBest||{})[k];return `<button class="topic ${lock?'locked':''} ${dn?'done':''}" data-topic="${k}" ${lock?'disabled':''}><b>${esc(t.n)}</b><span>${lock?'Desbloquea con 80% en el nivel anterior':(dn?'Superada':Q.filter(q=>t.tags.includes(q.t)).length+' preguntas')+(best!=null?' · mejor '+best+'%':'')}</span></button>`}).join('')}</div></details>`}).join('')}
+    </section>
     ${st.wrong.length?`<button class="btn ghost" id="review">Repasar mis ${st.wrong.length} errores</button>`:''}
     <div class="stats">
       <div class="stat"><b class="mono">${acc}%</b><span>Precisión</span></div>
@@ -1085,10 +1102,20 @@ function renderHome(){
   document.getElementById('bkshow').onclick=()=>{const box=document.getElementById('bkbox');box.hidden=false;document.getElementById('bktxt').value='';document.getElementById('bktxt').focus()};
   document.getElementById('bkdo').onclick=()=>{try{const d=JSON.parse(decodeURIComponent(escape(atob(document.getElementById('bktxt').value.trim()))));if(typeof d.xp!=='number')throw 0;st=Object.assign(st,d);save();toast('Progreso restaurado');render()}catch(e){toast('El código no es válido. Cópialo completo.')}};
   $app.querySelectorAll('[data-topic]').forEach(b=>b.onclick=()=>startQuiz(false,b.dataset.topic));
+  $app.querySelectorAll('details.area').forEach(d=>d.addEventListener('toggle',()=>{if(d.open){st.openArea=d.dataset.area;$app.querySelectorAll('details.area').forEach(x=>{if(x!==d)x.open=false})}else if(st.openArea===d.dataset.area)st.openArea='';save()}));
 }
 
 /* ================= QUIZ ================= */
 let qz=null;
+const AREAS=[
+ {id:'fund',n:'Fundamentos',d:'PK/PD, TDM y antibiograma',ic:'quiz',k:['pk','pkx','abg']},
+ {id:'micro',n:'Microbiología',d:'de lo básico a lo avanzado',ic:'dish',k:['m1','m2','m3']},
+ {id:'res',n:'Resistencia y evidencia',d:'MDR, carbapenemasas, paso a oral',ic:'shield',k:['mdr','bgn','ivo']},
+ {id:'hv',n:'Hongos y virus',d:'antifúngicos, antivirales, TARV',ic:'pill',k:['af','av','tarv']},
+ {id:'myco',n:'Micobacterias',d:'TB en 3 niveles y MNT',ic:'flame',k:['tb1','tb2','tb3','mnt']},
+ {id:'host',n:'Huésped especial',d:'UCI, oncología, TPH',ic:'case',k:['uci','onc','tph']},
+ {id:'prof',n:'Profilaxis',d:'quirúrgica, alergia y médica',ic:'star',k:['pq','pmed']}
+];
 const TOPICS={bgn:{n:'Resistencia en BGN (NEJM 2026)',tags:['Resistencia BGN']},ivo:{n:'Paso IV a oral (POET, OVIVA, SABATO)',tags:['IV a oral']},pkx:{n:'PK/PD a fondo',tags:['PK/PD a fondo']},uci:{n:'Paciente crítico',tags:['Paciente crítico']},onc:{n:'Oncología y neutropenia',tags:['Oncología']},tph:{n:'Trasplante hematopoyético',tags:['Trasplante hematopoyético']},pmed:{n:'Profilaxis médica',tags:['Profilaxis médica']},tb1:{n:'Tuberculosis 1 · básico',tags:['TB · básico']},tb2:{n:'Tuberculosis 2 · intermedio',tags:['TB · intermedio'],req:'tb1'},tb3:{n:'Tuberculosis 3 · avanzado',tags:['TB · avanzado'],req:'tb2'},mnt:{n:'Micobacterias no tuberculosas',tags:['MNT']},tarv:{n:'TARV y VIH',tags:['TARV']},pq:{n:'Profilaxis quirúrgica y alergia',tags:['Profilaxis y alergia']},abg:{n:'Lee el antibiograma',tags:['Antibiograma']},m1:{n:'Microbiología 1 · básico',tags:['Micro · básico']},m2:{n:'Microbiología 2 · intermedio',tags:['Micro · intermedio'],req:'m1'},m3:{n:'Microbiología 3 · avanzado',tags:['Micro · avanzado'],req:'m2'},av:{n:'Antivirales',tags:['Antivirales']},af:{n:'Antifúngicos',tags:['Antifúngicos','Candida','TDM antifúngico','Equinocandinas']},mdr:{n:'Gramnegativos MDR',tags:['Carbapenemasas','BLEE','Acinetobacter','Nuevos antimicrobianos','Resistencia intrínseca','Polimixinas']},pk:{n:'PK/PD y TDM',tags:['PK/PD','Vancomicina','TDM betalactámicos','Infusión prolongada','PK en críticos','Obesidad','Aminoglucósidos','Ajuste renal']}};
 function startQuiz(review,topic){
   let pool;
@@ -1126,7 +1153,7 @@ function answerQuiz(k){
 function renderQuizEnd(){
   const n=qz.list.length,s=qz.score;
   if(s===n&&n>=10)grant('perfect');
-  if(qz.topic){st.topicDone=st.topicDone||[];if(s>=Math.ceil(n*0.8)&&!st.topicDone.includes(qz.topic)){st.topicDone.push(qz.topic);save();const nx=Object.entries(TOPICS).find(([k,t])=>t.req===qz.topic);if(nx)setTimeout(()=>showModal('dish','Nivel desbloqueado',TOPICS[nx[0]].n,'Superaste el nivel anterior con 80% o más.'),900)}
+  if(qz.topic){st.topicBest=st.topicBest||{};const pc=Math.round(s/n*100);if(!(st.topicBest[qz.topic]>=pc))st.topicBest[qz.topic]=pc;save();st.topicDone=st.topicDone||[];if(s>=Math.ceil(n*0.8)&&!st.topicDone.includes(qz.topic)){st.topicDone.push(qz.topic);save();const nx=Object.entries(TOPICS).find(([k,t])=>t.req===qz.topic);if(nx)setTimeout(()=>showModal('dish','Nivel desbloqueado',TOPICS[nx[0]].n,'Superaste el nivel anterior con 80% o más.'),900)}
     if(st.topicDone.includes('av')&&st.topicDone.includes('af'))grant('avaf');
     if(st.topicDone.includes('m3'))grant('micro');
     if(st.topicDone.includes('abg'))grant('abg');
